@@ -1,6 +1,7 @@
 # Devilsoft Casino
 
 Текстовое казино игровой плагин для KOReader, стилизованное под интерфейс Windows 98.
+Only Russian language :)
 
 ## 🎰 Игры
 
