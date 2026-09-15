@@ -3,7 +3,8 @@
 Текстовое казино игровой плагин для KOReader, стилизованное под интерфейс Windows 98.
 Only Russian language :) 
 Write for kindle paperwhite 4
-
+ if you need another languages or games inside this plugin put this ai generated lua thrash in deepseek and he do it for you.
+ 
 ## 🎰 Игры
 
 - **Кости** — ставки на сумму, дубли, диапазоны.
