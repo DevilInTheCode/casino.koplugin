@@ -29,10 +29,15 @@
 
 ## 📸 Скриншоты
 
-<img width="1072" height="1448" alt="FileManager_2026-09-15_144936" src="https://github.com/user-attachments/assets/dc2150fb-c267-4adf-af33-4b75bec7a578" />
-<img width="1072" height="1448" alt="FileManager_2026-09-15_144928" src="https://github.com/user-attachments/assets/92459f43-5621-4521-99af-1576baa2bf9b" />
-<img width="1072" height="1448" alt="FileManager_2026-09-15_144909" src="https://github.com/user-attachments/assets/cd624cc3-7479-4198-9656-c7b86d437dac" />
-<img width="1072" height="1448" alt="FileManager_2026-09-15_144853" src="https://github.com/user-attachments/assets/daadadda-a957-4d68-8af6-fee6c9da2ced" />
+## 📸 Скриншоты
+
+<img src="https://github.com/user-attachments/assets/dc2150fb-c267-4adf-af33-4b75bec7a578" width="50%">
+
+<img src="https://github.com/user-attachments/assets/92459f43-5621-4521-99af-1576baa2bf9b" width="50%">
+
+<img src="https://github.com/user-attachments/assets/cd624cc3-7479-4198-9656-c7b86d437dac" width="50%">
+
+<img src="https://github.com/user-attachments/assets/daadadda-a957-4d68-8af6-fee6c9da2ced" width="50%">
 
 
 ## 📄 Лицензия
