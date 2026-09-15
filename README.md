@@ -4,7 +4,7 @@
 
 Only Russian language :) 
 Write for kindle paperwhite 4.
- if you need another languages or games inside this plugin put this ai generated lua thrash in deepseek and he do it for you.
+ if you need another languages or games inside this plugin put this ai generated lua trash in deepseek and he do it for you.
  
 ## 🎰 Игры
 
