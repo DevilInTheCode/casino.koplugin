@@ -58,7 +58,6 @@ local BTN_PASS  = "ПАС"
 local BTN_NEW   = "НОВАЯ РАЗДАЧА"
 
 function Durak:init()
-    -- Случайный seed, чтобы козырь всегда был разный
     math.randomseed(os.time() + math.random(1000000))
 end
 
@@ -193,19 +192,41 @@ function Durak:refillHands()
     local first = (self.attacker == "player") and self.player_hand or self.ai_hand
     local second = (self.attacker == "player") and self.ai_hand or self.player_hand
 
+    -- Первый добирает из колоды
     while #first < 6 and #self.deck > 0 do
         first[#first + 1] = table.remove(self.deck)
     end
+    -- Если колода опустела и козырь ещё лежит — забирает козырь
+    if #self.deck == 0 and self.trump_card and #first < 6 then
+        first[#first + 1] = self.trump_card
+        self.trump_card = nil
+    end
+
+    -- Второй добирает из колоды
     while #second < 6 and #self.deck > 0 do
         second[#second + 1] = table.remove(self.deck)
+    end
+    -- Если колода опустела и козырь ещё лежит — забирает козырь
+    if #self.deck == 0 and self.trump_card and #second < 6 then
+        second[#second + 1] = self.trump_card
+        self.trump_card = nil
     end
 
     self:sortPlayerHand()
 end
 
 function Durak:checkWin()
-    -- Ничья: у обоих пусто и колода пуста
-    if #self.player_hand == 0 and #self.ai_hand == 0 and #self.deck == 0 then
+    -- Защита: если у кого-то 0 карт, но колода или козырь не пусты — добор
+    if #self.ai_hand == 0 and (#self.deck > 0 or self.trump_card) then
+        self:refillHands()
+    end
+    if #self.player_hand == 0 and (#self.deck > 0 or self.trump_card) then
+        self:refillHands()
+    end
+
+    -- Ничья
+    if #self.player_hand == 0 and #self.ai_hand == 0
+       and #self.deck == 0 and not self.trump_card then
         self.balance = self.balance + self.bet
         self.status = "Ничья! Возврат ставки"
         self.phase = "done"
@@ -217,7 +238,7 @@ function Durak:checkWin()
     end
 
     -- Победа игрока
-    if #self.player_hand == 0 and #self.deck == 0 then
+    if #self.player_hand == 0 and #self.deck == 0 and not self.trump_card then
         local win = self.bet * 2
         self.balance = self.balance + win
         self.status = string.format("Вы выиграли! +$%d", win)
@@ -230,7 +251,7 @@ function Durak:checkWin()
     end
 
     -- Победа ИИ
-    if #self.ai_hand == 0 and #self.deck == 0 then
+    if #self.ai_hand == 0 and #self.deck == 0 and not self.trump_card then
         self.status = "ИИ выиграл. Вы — дурак!"
         self.phase = "done"
         self:refresh()
@@ -253,7 +274,6 @@ function Durak:playerMove()
     local card = self.selected_card
     local idx = self.selected_index
 
-    -- Проверка подкидывания
     if #self.table_attack > 0 then
         local ranks_on_table = {}
         local i
@@ -310,7 +330,6 @@ function Durak:playerBeat()
     self.selected_card = nil
     self.selected_index = nil
 
-    -- Показываем карту отбоя на секунду
     self.status = "Вы отбились: " .. defend
     self.phase = "pause"
     self:refresh()
@@ -346,11 +365,8 @@ function Durak:playerTake()
 
     self:sortPlayerHand()
 
-    -- Смена ролей: теперь ИИ атакует, ты защищаешься
     self.attacker = "ai"
     self.defender = "player"
-
-    -- Явный добор обоих до 6
     self:refillHands()
 
     if self:checkWin() then return end
@@ -370,7 +386,6 @@ function Durak:playerPass()
     end
 
     if #self.table_defend < #self.table_attack then
-        -- ИИ не отбился — забирает карты, ход остаётся у тебя
         local i
         for i = 1, #self.table_attack do
             self.ai_hand[#self.ai_hand + 1] = self.table_attack[i]
@@ -383,7 +398,6 @@ function Durak:playerPass()
         self.status = "ИИ забирает карты"
         self.phase = "player_attack"
     else
-        -- ИИ отбился — карты в биту, ход переходит к ИИ
         self.table_attack = {}
         self.table_defend = {}
         self.status = "ИИ отбился"
@@ -432,7 +446,6 @@ function Durak:aiDefend()
         self.phase = "player_attack"
         self:refresh()
     else
-        -- ИИ не может отбиться, забирает карты
         local j
         for j = 1, #self.table_attack do
             self.ai_hand[#self.ai_hand + 1] = self.table_attack[j]
@@ -480,7 +493,6 @@ function Durak:aiAttack()
             self:refresh()
             return
         else
-            -- ИИ пасует — игрок забирает карты
             local j
             for j = 1, #self.table_attack do
                 self.player_hand[#self.player_hand + 1] = self.table_attack[j]
@@ -502,7 +514,6 @@ function Durak:aiAttack()
         end
     end
 
-    -- Первая атака ИИ
     local best_idx = nil
     local best_rank = 999
     local i
@@ -722,14 +733,17 @@ function Durak:paintTo(bb, x, y)
     if self.trump_card then
         self:renderCard(bb, trump_x, trump_y, self.trump_card, card_w, card_h, true)
     end
+
     local deck_count = #self.deck
-    local stack = 2
-    if deck_count > 4 then stack = 3 end
-    if deck_count > 10 then stack = 4 end
-    if deck_count > 18 then stack = 5 end
-    local s
-    for s = 1, stack do
-        self:renderCard(bb, deck_x + (s - 1) * 2, deck_y + (s - 1) * 2, nil, card_w, card_h, false)
+    if deck_count > 0 then
+        local stack = 1
+        if deck_count > 4 then stack = 3 end
+        if deck_count > 10 then stack = 4 end
+        if deck_count > 18 then stack = 5 end
+        local s
+        for s = 1, stack do
+            self:renderCard(bb, deck_x + (s - 1) * 2, deck_y + (s - 1) * 2, nil, card_w, card_h, false)
+        end
     end
 
     -- ===== Стол =====
