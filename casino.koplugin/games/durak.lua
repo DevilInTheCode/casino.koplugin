@@ -58,6 +58,8 @@ local BTN_PASS  = "ПАС"
 local BTN_NEW   = "НОВАЯ РАЗДАЧА"
 
 function Durak:init()
+    -- Случайный seed, чтобы козырь всегда был разный
+    math.randomseed(os.time() + math.random(1000000))
 end
 
 function Durak:refresh()
@@ -202,9 +204,6 @@ function Durak:refillHands()
 end
 
 function Durak:checkWin()
-    -- Сначала добор, чтобы проверить реальное состояние
-    self:refillHands()
-
     -- Ничья: у обоих пусто и колода пуста
     if #self.player_hand == 0 and #self.ai_hand == 0 and #self.deck == 0 then
         self.balance = self.balance + self.bet
@@ -217,7 +216,7 @@ function Durak:checkWin()
         return true
     end
 
-    -- Победа игрока: у игрока пусто, колода пуста
+    -- Победа игрока
     if #self.player_hand == 0 and #self.deck == 0 then
         local win = self.bet * 2
         self.balance = self.balance + win
@@ -254,7 +253,7 @@ function Durak:playerMove()
     local card = self.selected_card
     local idx = self.selected_index
 
-    -- Проверка подкидывания: карта того же ранга, что уже на столе
+    -- Проверка подкидывания
     if #self.table_attack > 0 then
         local ranks_on_table = {}
         local i
@@ -311,7 +310,7 @@ function Durak:playerBeat()
     self.selected_card = nil
     self.selected_index = nil
 
-    -- Показываем карту отбоя на секунду, потом убираем в биту
+    -- Показываем карту отбоя на секунду
     self.status = "Вы отбились: " .. defend
     self.phase = "pause"
     self:refresh()
@@ -347,8 +346,12 @@ function Durak:playerTake()
 
     self:sortPlayerHand()
 
+    -- Смена ролей: теперь ИИ атакует, ты защищаешься
     self.attacker = "ai"
     self.defender = "player"
+
+    -- Явный добор обоих до 6
+    self:refillHands()
 
     if self:checkWin() then return end
 
@@ -392,6 +395,7 @@ function Durak:playerPass()
     self.selected_card = nil
     self.selected_index = nil
 
+    self:refillHands()
     if self:checkWin() then return end
     self:refresh()
 
@@ -425,7 +429,6 @@ function Durak:aiDefend()
         local card = table.remove(self.ai_hand, best_idx)
         self.table_defend[#self.table_defend + 1] = card
         self.status = "ИИ отбился: " .. card
-        -- Остаёмся в фазе player_attack — игрок может подкинуть ещё или сказать ПАС
         self.phase = "player_attack"
         self:refresh()
     else
@@ -443,6 +446,7 @@ function Durak:aiDefend()
         self.phase = "player_attack"
     end
 
+    self:refillHands()
     if self:checkWin() then return end
     self:refresh()
 end
@@ -490,6 +494,7 @@ function Durak:aiAttack()
             self.attacker = "player"
             self.defender = "ai"
             self.phase = "player_attack"
+            self:refillHands()
             if self:checkWin() then return end
             self.status = "Ваш ход"
             self:refresh()
