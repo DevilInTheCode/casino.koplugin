@@ -83,7 +83,6 @@ function Durak:newDeck()
     return d
 end
 
--- Правильное извлечение масти
 function Durak:suitOf(card)
     local i
     for i = #card, 1, -1 do
@@ -95,7 +94,6 @@ function Durak:suitOf(card)
     return ""
 end
 
--- Правильное извлечение ранга
 function Durak:rankOf(card)
     local i
     for i = #card, 1, -1 do
@@ -113,16 +111,14 @@ function Durak:rankValue(card)
     return map[rank] or 0
 end
 
--- Порядок мастей для сортировки (некозырные по порядку, козырь — в конце)
 function Durak:suitOrder(suit)
     if suit == self.trump_suit then
-        return 100  -- козырь всегда последний
+        return 100
     end
     local order = {["♠"]=1, ["♥"]=2, ["♦"]=3, ["♣"]=4}
     return order[suit] or 50
 end
 
--- Автосортировка руки игрока: некозырные по мастям, козыри справа, по возрастанию
 function Durak:sortPlayerHand()
     table.sort(self.player_hand, function(a, b)
         local sa = self:suitOf(a)
@@ -295,10 +291,18 @@ function Durak:playerBeat()
     self.selected_card = nil
     self.selected_index = nil
 
-    self:sortPlayerHand()
+    -- Карты уходят в биту
+    self.table_attack = {}
+    self.table_defend = {}
 
-    self.status = "Вы отбились"
+    -- Роли меняются: ты атакуешь
+    self.attacker = "player"
+    self.defender = "ai"
+    self:refillHands()
+    if self:checkWin() then return end
+
     self.phase = "player_attack"
+    self.status = "Вы отбились. Ваш ход — атакуйте"
     self:refresh()
 end
 
@@ -340,6 +344,7 @@ function Durak:playerPass()
     end
 
     if #self.table_defend < #self.table_attack then
+        -- ИИ не отбился — забирает карты, ход остаётся у тебя
         local i
         for i = 1, #self.table_attack do
             self.ai_hand[#self.ai_hand + 1] = self.table_attack[i]
@@ -350,22 +355,26 @@ function Durak:playerPass()
         self.table_attack = {}
         self.table_defend = {}
         self.status = "ИИ забирает карты"
+        self.phase = "player_attack"
     else
+        -- ИИ отбился — карты в биту, ход переходит к ИИ
         self.table_attack = {}
         self.table_defend = {}
         self.status = "ИИ отбился"
+        self.attacker = "ai"
+        self.defender = "player"
+        self.phase = "ai_attack"
     end
 
     self.selected_card = nil
     self.selected_index = nil
     self:refillHands()
     if self:checkWin() then return end
-
-    self.attacker = "ai"
-    self.defender = "player"
-    self.phase = "ai_attack"
     self:refresh()
-    self:aiAttack()
+
+    if self.phase == "ai_attack" then
+        self:aiAttack()
+    end
 end
 
 -- ==================== ИИ ====================
@@ -393,9 +402,23 @@ function Durak:aiDefend()
         local card = table.remove(self.ai_hand, best_idx)
         self.table_defend[#self.table_defend + 1] = card
         self.status = "ИИ отбился: " .. card
-        self.phase = "player_attack"
-        self.status = "Ваш ход (подкидывайте или ПАС)"
+
+        -- Карты в биту
+        self.table_attack = {}
+        self.table_defend = {}
+
+        -- Роли меняются: ИИ атакует
+        self.attacker = "ai"
+        self.defender = "player"
+        self:refillHands()
+        if self:checkWin() then return end
+
+        self.phase = "ai_attack"
+        self.status = "ИИ отбился. ИИ атакует..."
+        self:refresh()
+        self:aiAttack()
     else
+        -- ИИ берёт карты, ход остаётся у тебя
         local j
         for j = 1, #self.table_attack do
             self.ai_hand[#self.ai_hand + 1] = self.table_attack[j]
@@ -405,7 +428,7 @@ function Durak:aiDefend()
         end
         self.table_attack = {}
         self.table_defend = {}
-        self.status = "ИИ не может отбиться, забирает"
+        self.status = "ИИ не может отбиться, забирает. Ваш ход"
         self.phase = "player_attack"
     end
 
