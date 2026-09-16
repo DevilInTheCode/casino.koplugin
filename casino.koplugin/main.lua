@@ -14,6 +14,7 @@ local Dice = require("games.dice")
 local Poker = require("games.poker")
 local PokerAI = require("games.poker_ai")
 local Blackjack = require("games.blackjack")
+local Durak = require("games.durak")
 
 local WIN_FACE   = Blitbuffer.Color8(0xC0)
 local WIN_SHADOW = Blitbuffer.Color8(0x80)
@@ -59,8 +60,7 @@ function Casino:showCasino()
             if self.switcher then self.switcher:updateBalance(new_balance) end
             self:saveBalance()
         end,
-        on_bet_change = function(val)
-        end,
+        on_bet_change = function(val) end,
     }
 
     self.blackjack = Blackjack:new{
@@ -72,8 +72,7 @@ function Casino:showCasino()
             if self.switcher then self.switcher:updateBalance(new_balance) end
             self:saveBalance()
         end,
-        on_bet_change = function(val)
-        end,
+        on_bet_change = function(val) end,
     }
 
     self.poker = Poker:new{
@@ -85,8 +84,7 @@ function Casino:showCasino()
             if self.switcher then self.switcher:updateBalance(new_balance) end
             self:saveBalance()
         end,
-        on_bet_change = function(val)
-        end,
+        on_bet_change = function(val) end,
     }
 
     self.poker_ai = PokerAI:new{
@@ -98,8 +96,19 @@ function Casino:showCasino()
             if self.switcher then self.switcher:updateBalance(new_balance) end
             self:saveBalance()
         end,
-        on_bet_change = function(val)
+        on_bet_change = function(val) end,
+    }
+
+    self.durak = Durak:new{
+        balance = self.balance,
+        bet = 10,
+        on_result = function(bet, win, new_balance)
+            self.balance = new_balance
+            self.status_bar:updateBalance(new_balance)
+            if self.switcher then self.switcher:updateBalance(new_balance) end
+            self:saveBalance()
         end,
+        on_bet_change = function(val) end,
     }
 
     self.switcher = Switcher:new{
@@ -121,14 +130,18 @@ function Casino:showCasino()
     self.blackjack.root_layout = self.layout
     self.poker.root_layout = self.layout
     self.poker_ai.root_layout = self.layout
+    self.durak.root_layout = self.layout
     self.switcher.root_layout = self.layout
 
     self.switcher:startClock()
-
     UIManager:show(self.layout)
 end
 
 function Casino:currentGame()
+    if self.current == "durak" then
+        self.durak.balance = self.balance
+        return self.durak
+    end
     if self.current == "poker_ai" then
         self.poker_ai.balance = self.balance
         return self.poker_ai
@@ -202,6 +215,7 @@ function Casino:buildLayout()
             { label = "21", action = "blackjack" },
             { label = "Покер", action = "poker" },
             { label = "Покер с ИИ", action = "poker_ai" },
+            { label = "Дурак", action = "durak" },
             { label = "-", action = "separator" },
             { label = "Выключение казино", action = "close" },
         }
@@ -211,7 +225,6 @@ function Casino:buildLayout()
         local my = y + h - sw_h - menu_h
 
         bb:paintRect(mx, my, menu_w, menu_h, WIN_FACE)
-
         bb:paintRect(mx, my, menu_w, 2, WIN_LIGHT)
         bb:paintRect(mx, my, 2, menu_h, WIN_LIGHT)
         bb:paintRect(mx, my + menu_h - 2, menu_w, 2, WIN_SHADOW)
@@ -221,7 +234,6 @@ function Casino:buildLayout()
         local i, item
         for i, item in ipairs(items) do
             local iy = my + (i - 1) * item_h + Screen:scaleBySize(4)
-
             if item.action == "separator" then
                 bb:paintRect(mx + 4, iy + item_h / 2, menu_w - 8, 2, WIN_SHADOW)
                 bb:paintRect(mx + 4, iy + item_h / 2 + 2, menu_w - 8, 1, WIN_LIGHT)
@@ -230,14 +242,9 @@ function Casino:buildLayout()
                 if is_active then
                     bb:paintRect(mx + 4, iy, menu_w - 8, item_h, WIN_SHADOW)
                 end
-
                 local color = is_active and WIN_LIGHT or WIN_TEXT
-                RenderText:renderUtf8Text(bb,
-                    mx + Screen:scaleBySize(12),
-                    iy + item_h / 2 + 7,
-                    menu_font,
-                    item.label,
-                    false, false, color)
+                RenderText:renderUtf8Text(bb, mx + Screen:scaleBySize(12),
+                    iy + item_h / 2 + 7, menu_font, item.label, false, false, color)
             end
         end
 
@@ -245,9 +252,7 @@ function Casino:buildLayout()
         for i, item in ipairs(items) do
             local iy = my + (i - 1) * item_h + Screen:scaleBySize(4)
             self._menu_items[#self._menu_items + 1] = {
-                x = mx, y = iy,
-                w = menu_w, h = item_h,
-                action = item.action,
+                x = mx, y = iy, w = menu_w, h = item_h, action = item.action,
             }
         end
     end
@@ -262,7 +267,6 @@ function Casino:buildLayout()
                     if item.action == "close" then
                         self.casino:closeCasino()
                     elseif item.action == "separator" then
-                        -- ничего
                     else
                         self.casino.current = item.action
                         self.casino.start_menu_open = false
@@ -271,19 +275,15 @@ function Casino:buildLayout()
                     return true
                 end
             end
-
             self.casino.start_menu_open = false
             UIManager:setDirty(self, "ui")
             return true
         end
 
         if self.status_bar:onTap(ges) then return true end
-
         local game = self.casino:currentGame()
         if game:onTap(ges) then return true end
-
         if self.switcher:onTap(ges) then return true end
-
         return true
     end
 
@@ -298,43 +298,27 @@ end
 function Casino:resetBalance()
     self.balance = 1000
     self:saveBalance()
-    if self.status_bar then
-        self.status_bar.balance = 1000
-    end
-    if self.switcher then
-        self.switcher:updateBalance(1000)
-    end
-    if self.dice then
-        self.dice.balance = 1000
-    end
-    if self.blackjack then
-        self.blackjack.balance = 1000
-    end
-    if self.poker then
-        self.poker.balance = 1000
-    end
-    if self.poker_ai then
-        self.poker_ai.balance = 1000
-    end
-    if self.layout then
-        UIManager:setDirty(self.layout, "ui")
-    end
+    if self.status_bar then self.status_bar.balance = 1000 end
+    if self.switcher then self.switcher:updateBalance(1000) end
+    if self.dice then self.dice.balance = 1000 end
+    if self.blackjack then self.blackjack.balance = 1000 end
+    if self.poker then self.poker.balance = 1000 end
+    if self.poker_ai then self.poker_ai.balance = 1000 end
+    if self.durak then self.durak.balance = 1000 end
+    if self.layout then UIManager:setDirty(self.layout, "ui") end
 end
 
 function Casino:closeCasino()
     self:saveBalance()
-    if self.switcher then
-        self.switcher:stopClock()
-    end
-    if self.layout then
-        UIManager:close(self.layout)
-    end
+    if self.switcher then self.switcher:stopClock() end
+    if self.layout then UIManager:close(self.layout) end
     self.layout = nil
     self.status_bar = nil
     self.dice = nil
     self.blackjack = nil
     self.poker = nil
     self.poker_ai = nil
+    self.durak = nil
     self.switcher = nil
     self.start_menu_open = false
 end
