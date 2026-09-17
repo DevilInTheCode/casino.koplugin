@@ -58,7 +58,7 @@ local PAYOUTS = {
     ["◆"]   = {3, 5, 20},
     ["●"]   = {2, 3, 10},
 }
-local BONUS_SYMBOL = "S"
+local BONUS_SYMBOL = "@"
 local WILD = "♣"
 local LOGO = "FC"
 
