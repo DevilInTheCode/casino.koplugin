@@ -36,15 +36,17 @@ Write for kindle paperwhite 4.
 
 ```
 casino.koplugin/
-├── _meta.lua          # Описание плагина
-├── main.lua           # Каркас, меню «Пуск», переключение игр
-├── statusbar.lua      # Верхняя панель Win98
-├── switcher.lua       # Нижняя панель: Пуск, баланс, часы
+├── _meta.lua              # Описание плагина
+├── main.lua               # Каркас, меню «Пуск», переключение игр
+├── statusbar.lua          # Верхняя панель Win98
+├── switcher.lua           # Нижняя панель: Пуск, баланс, часы
 └── games/
-    ├── dice.lua       # Кости
-    ├── blackjack.lua  # 21
-    ├── poker.lua      # Видео-покер
-    └── poker_ai.lua   # Покер с ИИ
+    ├── dice.lua           # Кости
+    ├── blackjack.lua      # 21 (Блэкджек)
+    ├── poker.lua          # Видео-покер
+    ├── poker_ai.lua       # Покер с ИИ (Техасский Холдем 1 на 1)
+    ├── durak.lua          # Дурак (с ИИ)
+    └── fruitslots.lua     # Фруктослоты (Fruit Cocktail)
 ```
 
 ## 📸 Скриншоты
@@ -52,7 +54,8 @@ casino.koplugin/
 <img src="https://github.com/user-attachments/assets/e89e750e-9e03-4a04-85ad-a4405da7c6f1" width="50%">
 <img src="https://github.com/user-attachments/assets/ff99db4d-e07d-4b8c-8261-67cd7118746f" width="50%">
 <img src="https://github.com/user-attachments/assets/5a5c0b43-f121-40ea-b211-a92843aed4fe" width="50%">
-
+<img src="https://github.com/user-attachments/assets/02bf71f5-dbaf-4a06-91cd-3e66b1cc9b56" width="50%">
+<img src="https://github.com/user-attachments/assets/1e9fc88a-3c5b-47b1-a0a1-d7e3a1da8faa" width="50%">
 
 ## 📄 Лицензия
 
