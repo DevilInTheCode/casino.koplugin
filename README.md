@@ -49,13 +49,9 @@ casino.koplugin/
 
 ## 📸 Скриншоты
 
-<img src="https://github.com/user-attachments/assets/dc2150fb-c267-4adf-af33-4b75bec7a578" width="50%">
-
-<img src="https://github.com/user-attachments/assets/92459f43-5621-4521-99af-1576baa2bf9b" width="50%">
-
-<img src="https://github.com/user-attachments/assets/cd624cc3-7479-4198-9656-c7b86d437dac" width="50%">
-
-<img src="https://github.com/user-attachments/assets/daadadda-a957-4d68-8af6-fee6c9da2ced" width="50%">
+<img src="https://github.com/user-attachments/assets/e89e750e-9e03-4a04-85ad-a4405da7c6f1" width="50%">
+<img src="https://github.com/user-attachments/assets/ff99db4d-e07d-4b8c-8261-67cd7118746f" width="50%">
+<img src="https://github.com/user-attachments/assets/5a5c0b43-f121-40ea-b211-a92843aed4fe" width="50%">
 
 
 ## 📄 Лицензия
