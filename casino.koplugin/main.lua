@@ -115,6 +115,9 @@ function Casino:showCasino()
         balance = self.balance,
         on_start = function()
             self.start_menu_open = not self.start_menu_open
+            if self.switcher then
+                self.switcher:setStartActive(self.start_menu_open)
+            end
             if self.layout then
                 UIManager:setDirty(self.layout, "ui")
             end
@@ -270,12 +273,18 @@ function Casino:buildLayout()
                     else
                         self.casino.current = item.action
                         self.casino.start_menu_open = false
+                        if self.casino.switcher then
+                            self.casino.switcher:setStartActive(false)
+                        end
                         UIManager:setDirty(self, "ui")
                     end
                     return true
                 end
             end
             self.casino.start_menu_open = false
+            if self.casino.switcher then
+                self.casino.switcher:setStartActive(false)
+            end
             UIManager:setDirty(self, "ui")
             return true
         end
