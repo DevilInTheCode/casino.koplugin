@@ -24,7 +24,6 @@ local Blackjack = InputContainer:extend{
     offset_y = 0,
     height = 0,
 
-    -- зоны кнопок
     z_action_y = 0,
     z_action_h = 0,
     z_action_w = 0,
@@ -105,6 +104,32 @@ function Blackjack:drawCard()
     end
     return table.remove(self.deck)
 end
+
+-- ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ КАРТ ====================
+
+function Blackjack:suitOf(card)
+    local i
+    for i = #card, 1, -1 do
+        local b = card:byte(i)
+        if b < 128 or b >= 192 then
+            return card:sub(i)
+        end
+    end
+    return ""
+end
+
+function Blackjack:rankOf(card)
+    local i
+    for i = #card, 1, -1 do
+        local b = card:byte(i)
+        if b < 128 or b >= 192 then
+            return card:sub(1, i - 1)
+        end
+    end
+    return card
+end
+
+-- ==================== ИГРОВАЯ ЛОГИКА ====================
 
 function Blackjack:startNewHand()
     if self.balance < self.bet then
@@ -225,11 +250,12 @@ function Blackjack:finishHand()
     self:refresh()
 end
 
+-- ==================== ОБРАБОТКА ТАПОВ ====================
+
 function Blackjack:onTap(ges)
     if self.z_bet_y == 0 then return false end
     local pos = ges.pos
 
-    -- Кнопки ставок (всегда, внизу игровой зоны)
     if pos.y >= self.z_bet_y and pos.y <= self.z_bet_y + self.z_bet_h then
         local j, val
         for j, val in ipairs(BET_VALUES) do
@@ -243,16 +269,13 @@ function Blackjack:onTap(ges)
         end
     end
 
-    -- Кнопки действий (над ставками)
     if pos.y >= self.z_action_y and pos.y <= self.z_action_y + self.z_action_h then
-        -- НОВАЯ РАЗДАЧА (одна широкая кнопка)
         if self.phase == "idle" or self.phase == "done" then
             if pos.x >= self.z_action_x and pos.x <= self.z_action_x + self.z_action_w then
                 self:startNewHand()
                 return true
             end
         end
-        -- ВЗЯТЬ / ХВАТИТ / УДВОИТЬ
         if self.phase == "player" then
             local x1 = self.z_action_x
             if pos.x >= x1 and pos.x <= x1 + self.z_action_w then
@@ -275,18 +298,55 @@ function Blackjack:onTap(ges)
     return false
 end
 
-function Blackjack:renderCardsLine(bb, x, y, cards, hidden_second, font)
+-- ==================== ОТРИСОВКА КАРТ ====================
+
+function Blackjack:renderCard(bb, x, y, card, cw, ch, face_up)
+    if not face_up then
+        -- Рубашка
+        bb:paintRect(x, y, cw, ch, WIN_FACE)
+        local step = Screen:scaleBySize(8)
+        local thick = Screen:scaleBySize(2)
+        local i
+        for i = -ch, cw, step do
+            local j
+            for j = 0, ch do
+                local px = x + i + j
+                local py = y + ch - j
+                if px >= x and px < x + cw - thick and py >= y and py < y + ch - thick then
+                    bb:paintRect(px, py, thick, thick, WIN_SHADOW)
+                end
+            end
+        end
+        bb:paintRect(x, y, cw, 2, WIN_LIGHT)
+        bb:paintRect(x, y, 2, ch, WIN_LIGHT)
+        bb:paintRect(x, y + ch - 2, cw, 2, WIN_TEXT)
+        bb:paintRect(x + cw - 2, y, 2, ch, WIN_TEXT)
+        return
+    end
+
+    -- Лицо карты
+    bb:paintRect(x, y, cw, ch, WIN_LIGHT)
+    bb:paintRect(x, y, cw, 2, WIN_TEXT)
+    bb:paintRect(x, y + ch - 2, cw, 2, WIN_TEXT)
+    bb:paintRect(x, y, 2, ch, WIN_TEXT)
+    bb:paintRect(x + cw - 2, y, 2, ch, WIN_TEXT)
+
+    local rank = self:rankOf(card)
+    local suit = self:suitOf(card)
+    local color = (suit == "♥" or suit == "♦") and Blitbuffer.Color8(0x80) or WIN_TEXT
+
+    local f = Font:getFace("cfont", 28)
+    RenderText:renderUtf8Text(bb, x + 8, y + 42, f, rank, false, false, color)
+    RenderText:renderUtf8Text(bb, x + 8, y + 85, f, suit, false, false, color)
+end
+
+function Blackjack:renderCardsRow(bb, x, y, cards, hidden_second, cw, ch, gap)
     local cx = x
     local i, c
     for i, c in ipairs(cards) do
-        local text
-        if i == 2 and hidden_second then
-            text = "[?]"
-        else
-            text = "[" .. c .. "]"
-        end
-        RenderText:renderUtf8Text(bb, cx, y, font, text, false, false, WIN_TEXT)
-        cx = cx + Screen:scaleBySize(130)
+        local face_up = not (i == 2 and hidden_second)
+        self:renderCard(bb, cx, y, c, cw, ch, face_up)
+        cx = cx + cw + gap
     end
 end
 
@@ -298,26 +358,31 @@ function Blackjack:paintTo(bb, x, y)
 
     bb:paintRect(x, y, w, game_h, WIN_FACE)
 
-    local label_font  = Font:getFace("cfont", 22)
-    local card_font   = Font:getFace("cfont", 32)
-    local score_font  = Font:getFace("cfont", 20)
-    local status_font = Font:getFace("cfont", 24)
-    local btn_font    = Font:getFace("cfont", 26)
-    local bet_font    = Font:getFace("cfont", 26)
+    local label_font  = Font:getFace("cfont", 20)
+    local score_font  = Font:getFace("cfont", 18)
+    local status_font = Font:getFace("cfont", 20)
+    local btn_font    = Font:getFace("cfont", 22)
+    local bet_font    = Font:getFace("cfont", 24)
 
-    local left_x = x + 40
-    local cur_y = y + 40
+    local card_w = Screen:scaleBySize(80)
+    local card_h = Screen:scaleBySize(115)
+    local card_gap = Screen:scaleBySize(10)
+
+    local left_x = x + 30
 
     -- ============================================================
     -- Дилер
     -- ============================================================
+    local cur_y = y + 50
     RenderText:renderUtf8Text(bb, left_x, cur_y,
         label_font, "Дилер", false, false, WIN_TEXT)
 
-    cur_y = cur_y + 60
-    self:renderCardsLine(bb, left_x, cur_y, self.dealer_cards, self.phase == "player", card_font)
+    cur_y = cur_y + 30
+    self:renderCardsRow(bb, left_x, cur_y, self.dealer_cards,
+        self.phase == "player", card_w, card_h, card_gap)
 
-    cur_y = cur_y + 50
+    -- Очки дилера — ниже карт
+    cur_y = cur_y + card_h + 40
     local dealer_total_text = ""
     if self.phase == "player" and #self.dealer_cards >= 2 then
         local visible_total = self:cardValue(self.dealer_cards[1])
@@ -333,14 +398,16 @@ function Blackjack:paintTo(bb, x, y)
     -- ============================================================
     -- Игрок
     -- ============================================================
-    cur_y = cur_y + 70
+    cur_y = cur_y + 50
     RenderText:renderUtf8Text(bb, left_x, cur_y,
         label_font, "Вы", false, false, WIN_TEXT)
 
-    cur_y = cur_y + 60
-    self:renderCardsLine(bb, left_x, cur_y, self.player_cards, false, card_font)
+    cur_y = cur_y + 30
+    self:renderCardsRow(bb, left_x, cur_y, self.player_cards,
+        false, card_w, card_h, card_gap)
 
-    cur_y = cur_y + 50
+    -- Очки игрока — ниже карт
+    cur_y = cur_y + card_h + 40
     if #self.player_cards > 0 then
         local pt = string.format("Очки: %d", self:handTotal(self.player_cards))
         RenderText:renderUtf8Text(bb, left_x, cur_y,
@@ -348,34 +415,34 @@ function Blackjack:paintTo(bb, x, y)
     end
 
     -- ============================================================
-    -- Статус (по центру между игроком и кнопками)
+    -- Расчёт позиций кнопок
     -- ============================================================
-    local status_y = y + game_h * 0.62
-    local sw = RenderText:sizeUtf8Text(0, w, status_font, self.status).x
-    RenderText:renderUtf8Text(bb, x + (w - sw) / 2, status_y,
-        status_font, self.status, false, false, WIN_TEXT)
-
-    -- ============================================================
-    -- Расчёт позиций кнопок снизу вверх
-    -- ============================================================
-    self.z_bet_w = Screen:scaleBySize(140)
-    self.z_bet_h = Screen:scaleBySize(70)
+    self.z_bet_w = Screen:scaleBySize(130)
+    self.z_bet_h = Screen:scaleBySize(65)
     self.z_bet_gap = Screen:scaleBySize(10)
     local total_bets_w = #BET_VALUES * self.z_bet_w + (#BET_VALUES - 1) * self.z_bet_gap
     self.z_bet_x = x + (w - total_bets_w) / 2
     self.z_bet_y = y + game_h - self.z_bet_h - Screen:scaleBySize(15)
 
-    self.z_action_w = Screen:scaleBySize(200)
-    self.z_action_h = Screen:scaleBySize(80)
-    self.z_action_gap = Screen:scaleBySize(20)
-    self.z_action_y = self.z_bet_y - self.z_action_h - Screen:scaleBySize(20)
+    self.z_action_w = Screen:scaleBySize(180)
+    self.z_action_h = Screen:scaleBySize(60)
+    self.z_action_gap = Screen:scaleBySize(15)
+    self.z_action_y = self.z_bet_y - self.z_action_h - Screen:scaleBySize(15)
 
     -- ============================================================
-    -- Кнопка НОВАЯ РАЗДАЧА (одна широкая, по центру)
+    -- Статус (над кнопками)
+    -- ============================================================
+    local status_y = self.z_action_y - Screen:scaleBySize(30)
+    local sw = RenderText:sizeUtf8Text(0, w, status_font, self.status).x
+    RenderText:renderUtf8Text(bb, x + (w - sw) / 2, status_y,
+        status_font, self.status, false, false, WIN_TEXT)
+
+    -- ============================================================
+    -- Кнопка НОВАЯ РАЗДАЧА
     -- ============================================================
     if self.phase == "idle" or self.phase == "done" then
-        local new_w = Screen:scaleBySize(400)
-        local new_h = Screen:scaleBySize(80)
+        local new_w = Screen:scaleBySize(380)
+        local new_h = Screen:scaleBySize(60)
         local new_x = x + (w - new_w) / 2
         local new_y = self.z_action_y
 
@@ -393,12 +460,12 @@ function Blackjack:paintTo(bb, x, y)
         local lw = RenderText:sizeUtf8Text(0, new_w, btn_font, BTN_NEW).x
         RenderText:renderUtf8Text(bb,
             new_x + (new_w - lw) / 2,
-            new_y + new_h / 2 + 9,
+            new_y + new_h / 2 + 8,
             btn_font, BTN_NEW, false, false, WIN_TEXT)
     end
 
     -- ============================================================
-    -- Кнопки хода ВЗЯТЬ / ХВАТИТ / УДВОИТЬ
+    -- Кнопки ВЗЯТЬ / ХВАТИТ / УДВОИТЬ
     -- ============================================================
     if self.phase == "player" then
         local total_btn_w = 3 * self.z_action_w + 2 * self.z_action_gap
@@ -417,22 +484,22 @@ function Blackjack:paintTo(bb, x, y)
             local lw = RenderText:sizeUtf8Text(0, self.z_action_w, btn_font, labels[i]).x
             RenderText:renderUtf8Text(bb,
                 bx + (self.z_action_w - lw) / 2,
-                self.z_action_y + self.z_action_h / 2 + 9,
+                self.z_action_y + self.z_action_h / 2 + 8,
                 btn_font, labels[i], false, false, WIN_TEXT)
         end
     end
 
     -- ============================================================
-    -- Кнопки выбора ставки (самый низ игровой зоны)
+    -- Кнопки ставок
     -- ============================================================
     local j, val
     for j, val in ipairs(BET_VALUES) do
         local bx = self.z_bet_x + (j - 1) * (self.z_bet_w + self.z_bet_gap)
         local is_active = (val == self.bet)
+        local disabled = (self.phase ~= "idle" and self.phase ~= "done")
 
-        if is_active then
+        if is_active and not disabled then
             bb:paintRect(bx, self.z_bet_y, self.z_bet_w, self.z_bet_h, WIN_FACE)
-            -- инвертированные грани (вдавлено)
             bb:paintRect(bx, self.z_bet_y, self.z_bet_w, 2, WIN_SHADOW)
             bb:paintRect(bx, self.z_bet_y, 2, self.z_bet_h, WIN_SHADOW)
             bb:paintRect(bx, self.z_bet_y + self.z_bet_h - 2, self.z_bet_w, 2, WIN_LIGHT)
@@ -449,7 +516,7 @@ function Blackjack:paintTo(bb, x, y)
         local lw = RenderText:sizeUtf8Text(0, self.z_bet_w, bet_font, label).x
         RenderText:renderUtf8Text(bb,
             bx + (self.z_bet_w - lw) / 2,
-            self.z_bet_y + self.z_bet_h / 2 + 10,
+            self.z_bet_y + self.z_bet_h / 2 + 9,
             bet_font, label, false, false, WIN_TEXT)
     end
 end
