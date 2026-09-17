@@ -655,11 +655,38 @@ function FruitSlots:onTap(ges)
 end
 
 -- ============ ОТРИСОВКА ============
--- is_winner — если true, рисуется жирная рамка 4px
-function FruitSlots:renderSymbol(bb, x, y, w, h, sym, is_winner)
+
+-- Рисует звезду вокруг символа S (клубничка)
+function FruitSlots:renderStar(bb, x, y, w, h, color)
+    local cx = x + w / 2
+    local cy = y + h / 2
+    local r_out = math.min(w, h) / 2 - 4
+    local r_in = r_out / 2
+
+    local points = {}
+    local i
+    for i = 0, 9 do
+        local angle = math.rad(-90 + i * 36)
+        local r = (i % 2 == 0) and r_out or r_in
+        points[#points + 1] = {
+            x = cx + math.cos(angle) * r,
+            y = cy + math.sin(angle) * r,
+        }
+    end
+
+    -- Рисуем 10 линий между точками
+    for i = 1, 10 do
+        local p1 = points[i]
+        local p2 = points[(i % 10) + 1]
+        self:drawCustomLine(bb, p1.x, p1.y, p2.x, p2.y, 2, color, false)
+    end
+end
+
+function FruitSlots:renderSymbolWithDim(bb, x, y, w, h, sym, is_winner, is_dimmed)
     bb:paintRect(x, y, w, h, WIN_LIGHT)
 
     local border_thick = is_winner and 4 or 2
+    local current_text_color = is_dimmed and WIN_GRAY or WIN_TEXT
 
     bb:paintRect(x, y, w, border_thick, WIN_TEXT)
     bb:paintRect(x, y + h - border_thick, w, border_thick, WIN_TEXT)
@@ -669,7 +696,12 @@ function FruitSlots:renderSymbol(bb, x, y, w, h, sym, is_winner)
     local f = Font:getFace("cfont", 32)
     local tw = RenderText:sizeUtf8Text(0, w, f, sym).x
     RenderText:renderUtf8Text(bb, x + (w - tw) / 2, y + h / 2 + 12,
-        f, sym, false, false, WIN_TEXT)
+        f, sym, false, false, current_text_color)
+
+    -- Если это клубничка (бонус) — рисуем вокруг неё звезду
+    if sym == BONUS_SYMBOL then
+        self:renderStar(bb, x, y, w, h, WIN_TEXT)
+    end
 end
 
 function FruitSlots:drawCustomLine(bb, x1, y1, x2, y2, thick, color, is_dashed)
@@ -731,21 +763,72 @@ function FruitSlots:paintTo(bb, x, y)
     local gap = Screen:scaleBySize(4)
 
     local field_w = 5 * cell_w + 4 * gap
+    local side_marker_w = Screen:scaleBySize(35)
     local field_x = x + (w - field_w) / 2
 
-    -- Определяем, какие ячейки выиграли (для жирной рамки)
+    -- Определяем выигравшие ячейки и линии
     local winner_cells = {}
+    local active_lines_map = {}
     if #self.winning_lines > 0 then
         local wl_idx
         for wl_idx = 1, #self.winning_lines do
             local wl = self.winning_lines[wl_idx]
+            active_lines_map[wl.line] = true
             for _, cell in ipairs(wl.cells) do
                 winner_cells[cell.reel .. ":" .. cell.row] = true
             end
         end
     end
 
-    -- Шаг 1: Отрисовка всех ячеек (с жирной рамкой у выигравших)
+    -- ===== ШАГ 1: Боковые маркеры линий =====
+    local left_markers  = { {2, 4, 8}, {1, 6, 7}, {3, 5, 9} }
+    local right_markers = { {2, 5, 8}, {1, 6, 7}, {3, 4, 9} }
+
+    local row_idx
+    for row_idx = 1, 3 do
+        local cy = reel_y + (row_idx - 1) * (cell_h + gap) + cell_h / 2
+
+        local l_list = left_markers[row_idx]
+        local idx, l_num
+        for idx, l_num in ipairs(l_list) do
+            if l_num <= self.lines then
+                local mx = field_x - side_marker_w - 5 + (idx - 1) * Screen:scaleBySize(10)
+                local my = cy - Screen:scaleBySize(10)
+                local mw = Screen:scaleBySize(12)
+                local mh = Screen:scaleBySize(18)
+
+                if active_lines_map[l_num] then
+                    bb:paintRect(mx, my, mw, mh, WIN_TEXT)
+                    RenderText:renderUtf8Text(bb, mx + 2, my + mh / 2 + 5, help_font,
+                        tostring(l_num), false, false, WIN_LIGHT)
+                else
+                    RenderText:renderUtf8Text(bb, mx, my + mh / 2 + 5, help_font,
+                        tostring(l_num), false, false, WIN_GRAY)
+                end
+            end
+        end
+
+        local r_list = right_markers[row_idx]
+        for idx, l_num in ipairs(r_list) do
+            if l_num <= self.lines then
+                local mx = field_x + field_w + 5 + (idx - 1) * Screen:scaleBySize(10)
+                local my = cy - Screen:scaleBySize(10)
+                local mw = Screen:scaleBySize(12)
+                local mh = Screen:scaleBySize(18)
+
+                if active_lines_map[l_num] then
+                    bb:paintRect(mx, my, mw, mh, WIN_TEXT)
+                    RenderText:renderUtf8Text(bb, mx + 2, my + mh / 2 + 5, help_font,
+                        tostring(l_num), false, false, WIN_LIGHT)
+                else
+                    RenderText:renderUtf8Text(bb, mx, my + mh / 2 + 5, help_font,
+                        tostring(l_num), false, false, WIN_GRAY)
+                end
+            end
+        end
+    end
+
+    -- ===== ШАГ 2: Барабаны =====
     local i, j
     for i = 1, 5 do
         for j = 1, 3 do
@@ -756,11 +839,12 @@ function FruitSlots:paintTo(bb, x, y)
                 sym = self.reels[i][j]
             end
             local is_winner = winner_cells[i .. ":" .. j] or false
-            self:renderSymbol(bb, cx, cy, cell_w, cell_h, sym, is_winner)
+            local dim_light = (#self.winning_lines > 0 and not is_winner)
+            self:renderSymbolWithDim(bb, cx, cy, cell_w, cell_h, sym, is_winner, dim_light)
         end
     end
 
-    -- Шаг 2: Отрисовка линий через все 5 барабанов
+    -- ===== ШАГ 3: Выигрышные линии =====
     if #self.winning_lines > 0 then
         local line_offsets = { -12, -9, -6, -3, 0, 3, 6, 9, 12 }
         local wl_idx
@@ -769,6 +853,15 @@ function FruitSlots:paintTo(bb, x, y)
             local offset_y = line_offsets[wl.line] or 0
             local coords = LINES[wl.line]
 
+            -- Шлейф от левого маркера до 1-го барабана
+            local start_row = coords[1] + 1
+            local lx1 = field_x - 10
+            local ly1 = reel_y + (start_row - 1) * (cell_h + gap) + cell_h / 2 + offset_y
+            local lx2 = field_x + cell_w / 2
+            self:drawCustomLine(bb, lx1, ly1, lx2, ly1, 6, WIN_LIGHT, false)
+            self:drawCustomLine(bb, lx1, ly1, lx2, ly1, 2, WIN_TEXT, false)
+
+            -- Основная траектория
             local reel_idx
             for reel_idx = 1, 4 do
                 local row1 = coords[reel_idx] + 1
@@ -785,19 +878,30 @@ function FruitSlots:paintTo(bb, x, y)
                 self:drawCustomLine(bb, x1, y1, x2, y2, 8, WIN_LIGHT, false)
                 self:drawCustomLine(bb, x1, y1, x2, y2, 3, WIN_TEXT, is_dashed)
             end
+
+            -- Шлейф от 5-го барабана до правого маркера
+            local end_row = coords[5] + 1
+            local rx1 = field_x + field_w - cell_w / 2
+            local ry1 = reel_y + (end_row - 1) * (cell_h + gap) + cell_h / 2 + offset_y
+            local rx2 = field_x + field_w + 10
+            self:drawCustomLine(bb, rx1, ry1, rx2, ry1, 6, WIN_LIGHT, false)
+            self:drawCustomLine(bb, rx1, ry1, rx2, ry1, 2, WIN_TEXT, false)
         end
 
-        -- Шаг 3: Перерисовка выигравших ячеек поверх линий (чтобы линии не затирали символы)
+        -- ===== ШАГ 4: Перерисовка выигравших ячеек поверх линий =====
         for wl_idx = 1, #self.winning_lines do
             local wl = self.winning_lines[wl_idx]
             for _, cell in ipairs(wl.cells) do
                 local cx = field_x + (cell.reel - 1) * (cell_w + gap)
                 local cy = reel_y + (cell.row - 1) * (cell_h + gap)
                 local sym = self.reels[cell.reel][cell.row] or "?"
-                self:renderSymbol(bb, cx, cy, cell_w, cell_h, sym, true)
+                self:renderSymbolWithDim(bb, cx, cy, cell_w, cell_h, sym, true, false)
             end
         end
-    end    local lines_y = reel_y + 3 * cell_h + 3 * gap + 30
+    end
+
+    -- Номера линий под полем
+    local lines_y = reel_y + 3 * cell_h + 3 * gap + 30
     RenderText:renderUtf8Text(bb, left_x, lines_y,
         label_font, "ЛИНИИ:", false, false, WIN_TEXT)
     local line_x = left_x + Screen:scaleBySize(80)
@@ -808,6 +912,7 @@ function FruitSlots:paintTo(bb, x, y)
             lines_y, label_font, tostring(i), false, false, col)
     end
 
+    -- Справка
     local help_y = lines_y + 50
     RenderText:renderUtf8Text(bb, left_x, help_y,
         help_font, "СИМВОЛ   ×3     ×4     ×5", false, false, WIN_TEXT)
@@ -832,6 +937,7 @@ function FruitSlots:paintTo(bb, x, y)
         help_y = help_y + 30
     end
 
+    -- Кнопки
     self.z_bet_w = Screen:scaleBySize(100)
     self.z_bet_h = Screen:scaleBySize(55)
     self.z_bet_gap = Screen:scaleBySize(8)
@@ -947,7 +1053,7 @@ function FruitSlots:paintRisk(bb, x, y, w, game_h)
     local dealer_x = x + 60
     RenderText:renderUtf8Text(bb, dealer_x, card_y - 30,
         label_font, "ДИЛЕР", false, false, WIN_TEXT)
-    self:renderSymbol(bb, dealer_x, card_y, card_w, card_h, self.risk_dealer or "?")
+    self:renderSymbolWithDim(bb, dealer_x, card_y, card_w, card_h, self.risk_dealer or "?", false, false)
 
     local player_x = dealer_x + card_w + Screen:scaleBySize(60)
     RenderText:renderUtf8Text(bb, player_x, card_y - 30,
@@ -962,9 +1068,9 @@ function FruitSlots:paintRisk(bb, x, y, w, game_h)
     for i = 1, 4 do
         local cx = player_x + (i - 1) * (card_w + card_gap)
         if self.risk_revealed == i then
-            self:renderSymbol(bb, cx, card_y, card_w, card_h, self.risk_cards[i])
+            self:renderSymbolWithDim(bb, cx, card_y, card_w, card_h, self.risk_cards[i], false, false)
         else
-            self:renderSymbol(bb, cx, card_y, card_w, card_h, "?")
+            self:renderSymbolWithDim(bb, cx, card_y, card_w, card_h, "?", false, false)
         end
     end
 
@@ -1040,7 +1146,7 @@ function FruitSlots:paintBonus(bb, x, y, w, game_h)
         if is_marker then
             bb:paintRect(p.x-3, p.y-3, sector_w+6, sector_h+6, WIN_TEXT)
         end
-        self:renderSymbol(bb, p.x, p.y, sector_w, sector_h, sym)
+        self:renderSymbolWithDim(bb, p.x, p.y, sector_w, sector_h, sym, false, false)
     end
 
     local center_y = top + 40 + 3*(sector_h+gap) + sector_h
@@ -1052,7 +1158,7 @@ function FruitSlots:paintBonus(bb, x, y, w, game_h)
     for i = 1, 3 do
         local cx = center_x + (i-1)*(center_w+gap)
         local sym = self.bonus_center[i] or "?"
-        self:renderSymbol(bb, cx, center_y, center_w, center_h, sym)
+        self:renderSymbolWithDim(bb, cx, center_y, center_w, center_h, sym, false, false)
     end
 
     local status_y = center_y + center_h + 30
