@@ -15,6 +15,7 @@ local Poker = require("games.poker")
 local PokerAI = require("games.poker_ai")
 local Blackjack = require("games.blackjack")
 local Durak = require("games.durak")
+local FruitSlots = require("games.fruitslots")
 
 local WIN_FACE   = Blitbuffer.Color8(0xC0)
 local WIN_SHADOW = Blitbuffer.Color8(0x80)
@@ -111,6 +112,19 @@ function Casino:showCasino()
         on_bet_change = function(val) end,
     }
 
+    self.fruitslots = FruitSlots:new{
+        balance = self.balance,
+        bet = 1,
+        lines = 9,
+        on_result = function(bet, win, new_balance)
+            self.balance = new_balance
+            self.status_bar:updateBalance(new_balance)
+            if self.switcher then self.switcher:updateBalance(new_balance) end
+            self:saveBalance()
+        end,
+        on_bet_change = function(val) end,
+    }
+
     self.switcher = Switcher:new{
         balance = self.balance,
         on_start = function()
@@ -134,6 +148,7 @@ function Casino:showCasino()
     self.poker.root_layout = self.layout
     self.poker_ai.root_layout = self.layout
     self.durak.root_layout = self.layout
+    self.fruitslots.root_layout = self.layout
     self.switcher.root_layout = self.layout
 
     self.switcher:startClock()
@@ -141,6 +156,10 @@ function Casino:showCasino()
 end
 
 function Casino:currentGame()
+    if self.current == "fruitslots" then
+        self.fruitslots.balance = self.balance
+        return self.fruitslots
+    end
     if self.current == "durak" then
         self.durak.balance = self.balance
         return self.durak
@@ -219,6 +238,7 @@ function Casino:buildLayout()
             { label = "Покер", action = "poker" },
             { label = "Покер с ИИ", action = "poker_ai" },
             { label = "Дурак", action = "durak" },
+            { label = "Фруктослоты", action = "fruitslots" },
             { label = "-", action = "separator" },
             { label = "Выключение казино", action = "close" },
         }
@@ -314,6 +334,7 @@ function Casino:resetBalance()
     if self.poker then self.poker.balance = 1000 end
     if self.poker_ai then self.poker_ai.balance = 1000 end
     if self.durak then self.durak.balance = 1000 end
+    if self.fruitslots then self.fruitslots.balance = 1000 end
     if self.layout then UIManager:setDirty(self.layout, "ui") end
 end
 
@@ -328,6 +349,7 @@ function Casino:closeCasino()
     self.poker = nil
     self.poker_ai = nil
     self.durak = nil
+    self.fruitslots = nil
     self.switcher = nil
     self.start_menu_open = false
 end
