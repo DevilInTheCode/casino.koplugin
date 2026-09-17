@@ -173,15 +173,11 @@ function FruitSlots:start()
     UIManager:scheduleIn(0.3, tick)
 end
 
--- Проверка цепочки от одного края
--- direction = 1 (слева) или -1 (справа)
--- Возвращает: count, sym (символ, который образовал цепочку)
 function FruitSlots:checkChainFromEdge(symbols, direction)
     local n = #symbols
     local start_idx = (direction == 1) and 1 or n
     local step = direction
 
-    -- Ищем самый длинный символ (включая Wild) в начале цепочки
     local best_count = 0
     local best_sym = nil
 
@@ -224,10 +220,8 @@ function FruitSlots:checkWins()
             line_symbols[i] = self.reels[i][row]
         end
 
-        -- Проверка слева-направо
         local count_left, sym_left = self:checkChainFromEdge(line_symbols, 1)
 
-        -- Если слева 5 — фиксируем ×5 и переходим к следующей линии
         if count_left == 5 then
             local payout = PAYOUTS[sym_left] and PAYOUTS[sym_left][3]
             if payout then
@@ -245,9 +239,7 @@ function FruitSlots:checkWins()
                     self.winner_symbol = sym_left
                 end
             end
-            -- не проверяем справа
         else
-            -- Проверка слева (3 или 4)
             if count_left >= 3 then
                 local payout = PAYOUTS[sym_left] and PAYOUTS[sym_left][count_left - 2]
                 if payout then
@@ -267,7 +259,6 @@ function FruitSlots:checkWins()
                 end
             end
 
-            -- Проверка справа-налево
             local count_right, sym_right = self:checkChainFromEdge(line_symbols, -1)
             if count_right >= 3 then
                 local payout = PAYOUTS[sym_right] and PAYOUTS[sym_right][count_right - 2]
@@ -292,7 +283,6 @@ function FruitSlots:checkWins()
         end
     end
 
-    -- Бонус
     local bonus_count = 0
     local i, j
     for i = 1, 5 do
@@ -665,12 +655,16 @@ function FruitSlots:onTap(ges)
 end
 
 -- ============ ОТРИСОВКА ============
-function FruitSlots:renderSymbol(bb, x, y, w, h, sym)
+-- is_winner — если true, рисуется жирная рамка 4px
+function FruitSlots:renderSymbol(bb, x, y, w, h, sym, is_winner)
     bb:paintRect(x, y, w, h, WIN_LIGHT)
-    bb:paintRect(x, y, w, 2, WIN_TEXT)
-    bb:paintRect(x, y + h - 2, w, 2, WIN_TEXT)
-    bb:paintRect(x, y, 2, h, WIN_TEXT)
-    bb:paintRect(x + w - 2, y, 2, h, WIN_TEXT)
+
+    local border_thick = is_winner and 4 or 2
+
+    bb:paintRect(x, y, w, border_thick, WIN_TEXT)
+    bb:paintRect(x, y + h - border_thick, w, border_thick, WIN_TEXT)
+    bb:paintRect(x, y, border_thick, h, WIN_TEXT)
+    bb:paintRect(x + w - border_thick, y, border_thick, h, WIN_TEXT)
 
     local f = Font:getFace("cfont", 32)
     local tw = RenderText:sizeUtf8Text(0, w, f, sym).x
@@ -678,7 +672,7 @@ function FruitSlots:renderSymbol(bb, x, y, w, h, sym)
         f, sym, false, false, WIN_TEXT)
 end
 
-function FruitSlots:drawLine(bb, x1, y1, x2, y2, thick, color)
+function FruitSlots:drawCustomLine(bb, x1, y1, x2, y2, thick, color, is_dashed)
     local dx = math.abs(x2 - x1)
     local dy = math.abs(y2 - y1)
     local sx = x1 < x2 and 1 or -1
@@ -686,12 +680,19 @@ function FruitSlots:drawLine(bb, x1, y1, x2, y2, thick, color)
     local err = dx - dy
     local x, y = x1, y1
 
+    local pixel_count = 0
+
     while true do
-        bb:paintRect(x, y, thick, thick, color)
+        if not is_dashed or (math.floor(pixel_count / 6) % 2 == 0) then
+            bb:paintRect(x - math.floor(thick / 2), y - math.floor(thick / 2), thick, thick, color)
+        end
+
         if x == x2 and y == y2 then break end
         local e2 = 2 * err
         if e2 > -dy then err = err - dy; x = x + sx end
         if e2 < dx then err = err + dx; y = y + sy end
+
+        pixel_count = pixel_count + 1
     end
 end
 
@@ -732,6 +733,19 @@ function FruitSlots:paintTo(bb, x, y)
     local field_w = 5 * cell_w + 4 * gap
     local field_x = x + (w - field_w) / 2
 
+    -- Определяем, какие ячейки выиграли (для жирной рамки)
+    local winner_cells = {}
+    if #self.winning_lines > 0 then
+        local wl_idx
+        for wl_idx = 1, #self.winning_lines do
+            local wl = self.winning_lines[wl_idx]
+            for _, cell in ipairs(wl.cells) do
+                winner_cells[cell.reel .. ":" .. cell.row] = true
+            end
+        end
+    end
+
+    -- Шаг 1: Отрисовка всех ячеек (с жирной рамкой у выигравших)
     local i, j
     for i = 1, 5 do
         for j = 1, 3 do
@@ -741,28 +755,49 @@ function FruitSlots:paintTo(bb, x, y)
             if self.reels[i] and self.reels[i][j] then
                 sym = self.reels[i][j]
             end
-            self:renderSymbol(bb, cx, cy, cell_w, cell_h, sym)
+            local is_winner = winner_cells[i .. ":" .. j] or false
+            self:renderSymbol(bb, cx, cy, cell_w, cell_h, sym, is_winner)
         end
     end
 
-    -- Линии выигрышных комбинаций
+    -- Шаг 2: Отрисовка линий через все 5 барабанов
     if #self.winning_lines > 0 then
+        local line_offsets = { -12, -9, -6, -3, 0, 3, 6, 9, 12 }
         local wl_idx
         for wl_idx = 1, #self.winning_lines do
             local wl = self.winning_lines[wl_idx]
-            if wl and #wl.cells >= 2 then
-                local first = wl.cells[1]
-                local last = wl.cells[#wl.cells]
-                local x1 = field_x + (first.reel - 1) * (cell_w + gap) + cell_w / 2
-                local y1 = reel_y + (first.row - 1) * (cell_h + gap) + cell_h / 2
-                local x2 = field_x + (last.reel - 1) * (cell_w + gap) + cell_w / 2
-                local y2 = reel_y + (last.row - 1) * (cell_h + gap) + cell_h / 2
-                self:drawLine(bb, x1, y1, x2, y2, 4, WIN_TEXT)
+            local offset_y = line_offsets[wl.line] or 0
+            local coords = LINES[wl.line]
+
+            local reel_idx
+            for reel_idx = 1, 4 do
+                local row1 = coords[reel_idx] + 1
+                local row2 = coords[reel_idx + 1] + 1
+
+                local x1 = field_x + (reel_idx - 1) * (cell_w + gap) + cell_w / 2
+                local y1 = reel_y + (row1 - 1) * (cell_h + gap) + cell_h / 2 + offset_y
+
+                local x2 = field_x + (reel_idx) * (cell_w + gap) + cell_w / 2
+                local y2 = reel_y + (row2 - 1) * (cell_h + gap) + cell_h / 2 + offset_y
+
+                local is_dashed = (wl.line % 2 == 0)
+
+                self:drawCustomLine(bb, x1, y1, x2, y2, 8, WIN_LIGHT, false)
+                self:drawCustomLine(bb, x1, y1, x2, y2, 3, WIN_TEXT, is_dashed)
             end
         end
-    end
 
-    local lines_y = reel_y + 3 * cell_h + 3 * gap + 30
+        -- Шаг 3: Перерисовка выигравших ячеек поверх линий (чтобы линии не затирали символы)
+        for wl_idx = 1, #self.winning_lines do
+            local wl = self.winning_lines[wl_idx]
+            for _, cell in ipairs(wl.cells) do
+                local cx = field_x + (cell.reel - 1) * (cell_w + gap)
+                local cy = reel_y + (cell.row - 1) * (cell_h + gap)
+                local sym = self.reels[cell.reel][cell.row] or "?"
+                self:renderSymbol(bb, cx, cy, cell_w, cell_h, sym, true)
+            end
+        end
+    end    local lines_y = reel_y + 3 * cell_h + 3 * gap + 30
     RenderText:renderUtf8Text(bb, left_x, lines_y,
         label_font, "ЛИНИИ:", false, false, WIN_TEXT)
     local line_x = left_x + Screen:scaleBySize(80)
@@ -773,7 +808,6 @@ function FruitSlots:paintTo(bb, x, y)
             lines_y, label_font, tostring(i), false, false, col)
     end
 
-    -- Справка по комбинациям
     local help_y = lines_y + 50
     RenderText:renderUtf8Text(bb, left_x, help_y,
         help_font, "СИМВОЛ   ×3     ×4     ×5", false, false, WIN_TEXT)
@@ -798,7 +832,6 @@ function FruitSlots:paintTo(bb, x, y)
         help_y = help_y + 30
     end
 
-    -- Кнопки
     self.z_bet_w = Screen:scaleBySize(100)
     self.z_bet_h = Screen:scaleBySize(55)
     self.z_bet_gap = Screen:scaleBySize(8)
@@ -855,9 +888,9 @@ function FruitSlots:paintTo(bb, x, y)
             btn_font, lines_label, false, false, WIN_TEXT)
     end
 
-    local j, val
-    for j, val in ipairs(BET_VALUES) do
-        local bx = self.z_bet_x + (j - 1) * (self.z_bet_w + self.z_bet_gap)
+    local j2, val
+    for j2, val in ipairs(BET_VALUES) do
+        local bx = self.z_bet_x + (j2 - 1) * (self.z_bet_w + self.z_bet_gap)
         local is_active = (val == self.bet)
         local disabled = (self.phase ~= "idle" and self.phase ~= "done")
 
