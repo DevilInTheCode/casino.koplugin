@@ -283,6 +283,7 @@ function FruitSlots:checkWins()
         end
     end
 
+    -- Проверка бонуса
     local bonus_count = 0
     local i, j
     for i = 1, 5 do
@@ -655,8 +656,6 @@ function FruitSlots:onTap(ges)
 end
 
 -- ============ ОТРИСОВКА ============
-
--- Рисует звезду вокруг символа S (клубничка)
 function FruitSlots:renderStar(bb, x, y, w, h, color)
     local cx = x + w / 2
     local cy = y + h / 2
@@ -674,7 +673,6 @@ function FruitSlots:renderStar(bb, x, y, w, h, color)
         }
     end
 
-    -- Рисуем 10 линий между точками
     for i = 1, 10 do
         local p1 = points[i]
         local p2 = points[(i % 10) + 1]
@@ -698,7 +696,6 @@ function FruitSlots:renderSymbolWithDim(bb, x, y, w, h, sym, is_winner, is_dimme
     RenderText:renderUtf8Text(bb, x + (w - tw) / 2, y + h / 2 + 12,
         f, sym, false, false, current_text_color)
 
-    -- Если это клубничка (бонус) — рисуем вокруг неё звезду
     if sym == BONUS_SYMBOL then
         self:renderStar(bb, x, y, w, h, WIN_TEXT)
     end
@@ -766,7 +763,6 @@ function FruitSlots:paintTo(bb, x, y)
     local side_marker_w = Screen:scaleBySize(35)
     local field_x = x + (w - field_w) / 2
 
-    -- Определяем выигравшие ячейки и линии
     local winner_cells = {}
     local active_lines_map = {}
     if #self.winning_lines > 0 then
